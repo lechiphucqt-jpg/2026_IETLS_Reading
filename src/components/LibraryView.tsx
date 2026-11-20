@@ -8,6 +8,9 @@ import {
   Plus,
   Sparkles,
   Download,
+  Trash2,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 import { ReadingPassage, VocabEntry } from '../types/ielts';
 
@@ -20,6 +23,7 @@ interface LibraryViewProps {
   onOpenExport: (passageId: string) => void;
   onOpenDigitize: () => void;
   onNavigateVocab: () => void;
+  onDeletePassage?: (passageId: string) => void;
 }
 
 export function LibraryView({
@@ -31,12 +35,14 @@ export function LibraryView({
   onOpenExport,
   onOpenDigitize,
   onNavigateVocab,
+  onDeletePassage,
 }: LibraryViewProps) {
   const [selectedBook, setSelectedBook] = useState<string>('Tất cả');
   const [selectedTopic, setSelectedTopic] = useState<string>('Tất cả');
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>('Tất cả');
   const [searchQuery, setSearchQuery] = useState('');
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+  const [passageToDelete, setPassageToDelete] = useState<ReadingPassage | null>(null);
 
   const books = useMemo(
     () => ['Tất cả', ...Array.from(new Set(passages.map((p) => p.sourceBook)))],
@@ -194,7 +200,7 @@ export function LibraryView({
             return (
               <article
                 key={passage.id}
-                className="group bg-white border border-slate-200 hover:border-teal-700/50 rounded-2xl overflow-hidden flex flex-col justify-between transition-all hover:shadow-lg"
+                className="group bg-white border border-slate-200 hover:border-teal-700/50 rounded-2xl overflow-hidden flex flex-col justify-between transition-all hover:shadow-lg relative"
               >
                 <div>
                   {/* 4:3 Editorial Cover */}
@@ -224,6 +230,21 @@ export function LibraryView({
                         {vocabCount} Từ vựng Pre-teach
                       </span>
                     </div>
+
+                    {/* Delete Passage Button on Cover */}
+                    {onDeletePassage && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPassageToDelete(passage);
+                        }}
+                        title="Xóa bài đọc khỏi thư viện"
+                        className="absolute top-3 left-3 p-1.5 rounded-full bg-slate-900/60 hover:bg-rose-600 text-slate-200 hover:text-white backdrop-blur-md border border-white/20 shadow-xs transition-all cursor-pointer opacity-80 hover:opacity-100"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
 
                   {/* Card Body */}
@@ -258,7 +279,7 @@ export function LibraryView({
                   </div>
                 </div>
 
-                {/* Card Footer Actions with Pre-teach, Student, 16:9, and Export */}
+                {/* Card Footer Actions with Pre-teach, Student, 16:9, Export, and Delete */}
                 <div className="px-5 pb-5 pt-1 space-y-2">
                   <div className="flex items-center gap-2">
                     {/* PRE-TEACH VOCABULARY ACTION */}
@@ -305,6 +326,18 @@ export function LibraryView({
                       <Presentation className="w-3.5 h-3.5" />
                       16:9
                     </button>
+
+                    {/* DELETE PASSAGE BUTTON */}
+                    {onDeletePassage && (
+                      <button
+                        type="button"
+                        onClick={() => setPassageToDelete(passage)}
+                        title="Xóa bài đọc khỏi thư viện"
+                        className="inline-flex items-center justify-center p-2 text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl transition-colors cursor-pointer border border-rose-200 shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </article>
@@ -328,6 +361,78 @@ export function LibraryView({
             </p>
           </button>
         </section>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {passageToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-6 h-6 text-rose-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-bold text-slate-900">
+                  Xác nhận xóa bài đọc?
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Thao tác này sẽ xóa vĩnh viễn bài đọc và các dữ liệu liên quan khỏi thư viện.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPassageToDelete(null)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs space-y-2">
+              <div className="font-bold text-slate-900 text-sm">
+                {passageToDelete.title}
+              </div>
+              <div className="text-slate-500 flex items-center gap-2">
+                <span>{passageToDelete.sourceBook}</span>
+                <span>·</span>
+                <span>{passageToDelete.topic}</span>
+                <span>·</span>
+                <span>{passageToDelete.bandLevel}</span>
+              </div>
+              <div className="pt-2 border-t border-slate-200 text-rose-700 font-medium leading-relaxed">
+                ⚠️ Dữ liệu sẽ bị xóa: <strong>{passageToDelete.paragraphs.length}</strong> đoạn văn,{' '}
+                <strong>{passageToDelete.questions.length}</strong> câu hỏi và{' '}
+                <strong>
+                  {vocab.filter((v) => v.passageId === passageToDelete.id).length}
+                </strong>{' '}
+                từ vựng Pre-teach thuộc bài đọc này.
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setPassageToDelete(null)}
+                className="px-4 py-2.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onDeletePassage) {
+                    onDeletePassage(passageToDelete.id);
+                  }
+                  setPassageToDelete(null);
+                }}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-colors cursor-pointer shadow-xs"
+              >
+                <Trash2 className="w-4 h-4" />
+                Xác nhận xóa bài đọc
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );

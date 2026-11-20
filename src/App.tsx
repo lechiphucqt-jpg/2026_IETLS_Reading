@@ -160,6 +160,20 @@ export default function App() {
     );
   };
 
+  const handleDeletePassage = (passageId: string) => {
+    setPassages((prev) => {
+      const remaining = prev.filter((p) => p.id !== passageId);
+      if (activePassageId === passageId) {
+        if (remaining.length > 0) {
+          setActivePassageId(remaining[0].id);
+        }
+      }
+      return remaining;
+    });
+    setVocab((prev) => prev.filter((v) => v.passageId !== passageId));
+    setAnnotations((prev) => prev.filter((a) => a.passageId !== passageId));
+  };
+
   const handlePassageCreated = (
     passage: ReadingPassage,
     extractedVocab: Omit<VocabEntry, 'id'>[]
@@ -223,6 +237,7 @@ export default function App() {
           }}
           onOpenDigitize={() => setDigitizeModal({ open: true, tab: 'pdf' })}
           onNavigateVocab={() => setActiveView('vocabulary')}
+          onDeletePassage={handleDeletePassage}
         />
       )}
 
