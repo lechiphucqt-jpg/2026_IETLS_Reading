@@ -174,6 +174,12 @@ export default function App() {
     setAnnotations((prev) => prev.filter((a) => a.passageId !== passageId));
   };
 
+  const handleUpdatePassageImage = (passageId: string, imageUrl: string | undefined) => {
+    setPassages((prev) =>
+      prev.map((p) => (p.id === passageId ? { ...p, coverImage: imageUrl } : p))
+    );
+  };
+
   const handlePassageCreated = (
     passage: ReadingPassage,
     extractedVocab: Omit<VocabEntry, 'id'>[]
@@ -238,6 +244,7 @@ export default function App() {
           onOpenDigitize={() => setDigitizeModal({ open: true, tab: 'pdf' })}
           onNavigateVocab={() => setActiveView('vocabulary')}
           onDeletePassage={handleDeletePassage}
+          onUpdatePassageImage={handleUpdatePassageImage}
         />
       )}
 

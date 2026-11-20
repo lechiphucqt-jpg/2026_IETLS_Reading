@@ -1,18 +1,20 @@
 import { useMemo, useState } from 'react';
 import {
+  AlertTriangle,
+  ArrowRight,
   BookOpen,
+  Camera,
+  Download,
   Headphones,
+  Plus,
   Presentation,
   Search,
-  ArrowRight,
-  Plus,
   Sparkles,
-  Download,
   Trash2,
-  AlertTriangle,
   X,
 } from 'lucide-react';
 import { ReadingPassage, VocabEntry } from '../types/ielts';
+import { PassageImageModal } from './PassageImageModal';
 
 interface LibraryViewProps {
   passages: ReadingPassage[];
@@ -24,6 +26,7 @@ interface LibraryViewProps {
   onOpenDigitize: () => void;
   onNavigateVocab: () => void;
   onDeletePassage?: (passageId: string) => void;
+  onUpdatePassageImage?: (passageId: string, imageUrl: string | undefined) => void;
 }
 
 export function LibraryView({
@@ -36,6 +39,7 @@ export function LibraryView({
   onOpenDigitize,
   onNavigateVocab,
   onDeletePassage,
+  onUpdatePassageImage,
 }: LibraryViewProps) {
   const [selectedBook, setSelectedBook] = useState<string>('Tất cả');
   const [selectedTopic, setSelectedTopic] = useState<string>('Tất cả');
@@ -43,6 +47,7 @@ export function LibraryView({
   const [searchQuery, setSearchQuery] = useState('');
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [passageToDelete, setPassageToDelete] = useState<ReadingPassage | null>(null);
+  const [passageForImage, setPassageForImage] = useState<ReadingPassage | null>(null);
 
   const books = useMemo(
     () => ['Tất cả', ...Array.from(new Set(passages.map((p) => p.sourceBook)))],
@@ -206,45 +211,92 @@ export function LibraryView({
                   {/* 4:3 Editorial Cover */}
                   <div className="aspect-[4/3] w-full overflow-hidden bg-slate-100 relative border-b border-slate-100">
                     {!imgFailed ? (
-                      <img
-                        src={passage.coverImage}
-                        alt={passage.title}
-                        referrerPolicy="no-referrer"
-                        onError={() =>
-                          setFailedImages((prev) => ({ ...prev, [passage.id]: true }))
-                        }
-                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                      />
+                      <>
+                        <img
+                          src={passage.coverImage}
+                          alt={passage.title}
+                          referrerPolicy="no-referrer"
+                          onError={() =>
+                            setFailedImages((prev) => ({ ...prev, [passage.id]: true }))
+                          }
+                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                        />
+
+                        {/* Hover Overlay to Edit / Change Cover Image */}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPassageForImage(passage);
+                          }}
+                          className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
+                        >
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-slate-900/90 backdrop-blur-md rounded-xl border border-white/20 shadow-md hover:bg-teal-800 transition-colors">
+                            <Camera className="w-3.5 h-3.5 text-amber-300" />
+                            Đổi ảnh bìa
+                          </span>
+                        </div>
+                      </>
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-slate-100 via-teal-50/60 to-slate-200 flex flex-col items-center justify-center p-6 text-center">
                         <BookOpen className="w-8 h-8 text-teal-800/70 mb-2" />
                         <span className="font-editorial text-sm font-semibold text-slate-700 line-clamp-2">
                           {passage.title}
                         </span>
+
+                        {/* Primary Button to Insert Image when card has no image */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPassageForImage(passage);
+                          }}
+                          className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-teal-900 bg-white hover:bg-teal-50 rounded-xl shadow-xs border border-teal-300 transition-all hover:scale-105 cursor-pointer"
+                        >
+                          <Camera className="w-3.5 h-3.5 text-teal-700" />
+                          <span>Chèn ảnh bài đọc</span>
+                        </button>
                       </div>
                     )}
 
                     {/* Pre-teach Badge */}
-                    <div className="absolute top-3 right-3">
+                    <div className="absolute top-3 right-3 pointer-events-none">
                       <span className="bg-teal-900/80 backdrop-blur-md text-teal-100 text-[10px] font-black uppercase px-2.5 py-1 rounded-full border border-teal-500/40 shadow-xs">
                         {vocabCount} Từ vựng Pre-teach
                       </span>
                     </div>
 
-                    {/* Delete Passage Button on Cover */}
-                    {onDeletePassage && (
+                    {/* Top-left Quick Action Controls */}
+                    <div className="absolute top-3 left-3 flex items-center gap-1.5 z-10">
+                      {/* Delete Passage Button */}
+                      {onDeletePassage && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPassageToDelete(passage);
+                          }}
+                          title="Xóa bài đọc khỏi thư viện"
+                          className="p-1.5 rounded-full bg-slate-900/60 hover:bg-rose-600 text-slate-200 hover:text-white backdrop-blur-md border border-white/20 shadow-xs transition-all cursor-pointer opacity-80 hover:opacity-100"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+
+                      {/* Change / Insert Image Button */}
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setPassageToDelete(passage);
+                          setPassageForImage(passage);
                         }}
-                        title="Xóa bài đọc khỏi thư viện"
-                        className="absolute top-3 left-3 p-1.5 rounded-full bg-slate-900/60 hover:bg-rose-600 text-slate-200 hover:text-white backdrop-blur-md border border-white/20 shadow-xs transition-all cursor-pointer opacity-80 hover:opacity-100"
+                        title="Chèn / đổi ảnh bìa bài đọc này"
+                        className="p-1.5 rounded-full bg-slate-900/60 hover:bg-teal-700 text-slate-200 hover:text-white backdrop-blur-md border border-white/20 shadow-xs transition-all cursor-pointer opacity-80 hover:opacity-100"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Camera className="w-3.5 h-3.5" />
                       </button>
-                    )}
+                    </div>
                   </div>
 
                   {/* Card Body */}
@@ -279,7 +331,7 @@ export function LibraryView({
                   </div>
                 </div>
 
-                {/* Card Footer Actions with Pre-teach, Student, 16:9, Export, and Delete */}
+                {/* Card Footer Actions with Pre-teach, Student, 16:9, Export, Camera, and Delete */}
                 <div className="px-5 pb-5 pt-1 space-y-2">
                   <div className="flex items-center gap-2">
                     {/* PRE-TEACH VOCABULARY ACTION */}
@@ -325,6 +377,16 @@ export function LibraryView({
                     >
                       <Presentation className="w-3.5 h-3.5" />
                       16:9
+                    </button>
+
+                    {/* INSERT / CHANGE IMAGE BUTTON */}
+                    <button
+                      type="button"
+                      onClick={() => setPassageForImage(passage)}
+                      title="Chèn / đổi ảnh bìa bài đọc này"
+                      className="inline-flex items-center justify-center p-2 text-xs font-semibold text-teal-800 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 rounded-xl transition-colors cursor-pointer border border-teal-200 shrink-0"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
                     </button>
 
                     {/* DELETE PASSAGE BUTTON */}
@@ -434,6 +496,25 @@ export function LibraryView({
           </div>
         </div>
       )}
+
+      {/* Passage Cover Image Modal (Insert & Save Permanently) */}
+      <PassageImageModal
+        isOpen={passageForImage !== null}
+        passage={passageForImage}
+        onClose={() => setPassageForImage(null)}
+        onSaveImage={(passageId, imageUrl) => {
+          if (onUpdatePassageImage) {
+            onUpdatePassageImage(passageId, imageUrl);
+          }
+          if (imageUrl) {
+            setFailedImages((prev) => {
+              const updated = { ...prev };
+              delete updated[passageId];
+              return updated;
+            });
+          }
+        }}
+      />
     </main>
   );
 }

@@ -93,6 +93,54 @@ async function startServer() {
     }
   });
 
+  // 0.1 Save Passage Cover Image directly to project system files
+  app.post('/api/save-passage-image', async (req, res) => {
+    try {
+      const { passageId, base64Data } = req.body as {
+        passageId?: string;
+        base64Data?: string;
+      };
+      if (!passageId || !base64Data) {
+        res.status(400).json({ error: 'Thiếu passageId hoặc dữ liệu ảnh.' });
+        return;
+      }
+
+      const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      const ext = matches
+        ? matches[1].includes('png')
+          ? '.png'
+          : matches[1].includes('webp')
+          ? '.webp'
+          : matches[1].includes('svg')
+          ? '.svg'
+          : '.jpg'
+        : '.jpg';
+      const buffer = matches ? Buffer.from(matches[2], 'base64') : Buffer.from(base64Data, 'base64');
+
+      const publicImagesDir = path.resolve(__dirname, 'public', 'images', 'passages');
+      const srcImagesDir = path.resolve(__dirname, 'src', 'assets', 'images');
+      if (!fs.existsSync(publicImagesDir)) fs.mkdirSync(publicImagesDir, { recursive: true });
+      if (!fs.existsSync(srcImagesDir)) fs.mkdirSync(srcImagesDir, { recursive: true });
+
+      const safeId = passageId.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const savedFileName = `cover_${safeId}_${Date.now()}${ext}`;
+
+      fs.writeFileSync(path.join(publicImagesDir, savedFileName), buffer);
+      fs.writeFileSync(path.join(srcImagesDir, savedFileName), buffer);
+
+      const publicUrl = `/images/passages/${savedFileName}`;
+
+      res.json({
+        success: true,
+        imageUrl: publicUrl,
+        message: 'Đã lưu ảnh bìa bài đọc vào file hệ thống thành công!',
+      });
+    } catch (err) {
+      console.error('[Save Passage Image Error]', err);
+      res.status(500).json({ error: 'Không thể lưu ảnh vào file hệ thống.' });
+    }
+  });
+
   // 1. Contextual Word Lookup for Smart Vocabulary Notebook
   app.post('/api/lookup-word', async (req, res) => {
     try {
