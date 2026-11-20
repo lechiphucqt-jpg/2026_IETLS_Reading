@@ -87,7 +87,8 @@ export function DigitizeModal({
 
   if (!isOpen) return null;
 
-  const hasApiKey = Boolean(getStoredApiKey());
+  const storedKey = getStoredApiKey();
+  const hasValidKey = storedKey.startsWith('AIzaSy') && storedKey.length >= 35;
 
   const handlePdfUpload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,8 +97,13 @@ export function DigitizeModal({
       return;
     }
 
-    if (!hasApiKey) {
-      setError('Bạn cần nhập Gemini API Key để số hóa sách PDF. Vui lòng bấm "Cài đặt API Key".');
+    if (!storedKey) {
+      setError('Bạn chưa nhập Gemini API Key. Vui lòng bấm nút "Đổi API Key ngay" bên dưới để nhập khóa API từ Google AI Studio.');
+      return;
+    }
+
+    if (!hasValidKey) {
+      setError('Khóa API hiện tại không đúng định dạng của Google Gemini (phải bắt đầu bằng "AIzaSy..."). Vui lòng bấm nút "Đổi API Key ngay" bên dưới để dán lại khóa.');
       return;
     }
 
@@ -367,21 +373,23 @@ export function DigitizeModal({
           </button>
         </div>
 
-        {/* Missing API Key Alert */}
-        {!hasApiKey && (
-          <div className="p-3 bg-amber-50 border-b border-amber-200 text-amber-900 text-xs flex items-center justify-between px-6">
-            <span className="flex items-center gap-2">
-              <Key className="w-4 h-4 text-amber-700" />
-              Bạn chưa cấu hình Gemini API Key.
-            </span>
+        {/* API Key Status Alert */}
+        {!hasValidKey && (
+          <div className="p-3.5 bg-amber-50 border-b border-amber-300 text-amber-950 text-xs flex flex-wrap items-center justify-between gap-3 px-6">
+            <div className="flex items-center gap-2.5">
+              <Key className="w-4 h-4 text-amber-700 shrink-0" />
+              <span>
+                {!storedKey
+                  ? 'Bạn chưa cài đặt khóa Gemini API Key để số hóa tệp.'
+                  : 'Khóa API Key hiện tại có thể không hợp lệ (phải bắt đầu bằng "AIzaSy...").'}
+              </span>
+            </div>
             <button
               type="button"
-              onClick={() => {
-                onOpenApiKeyModal?.();
-              }}
-              className="font-bold underline text-teal-800 hover:text-teal-950 cursor-pointer"
+              onClick={() => onOpenApiKeyModal?.()}
+              className="font-bold px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl cursor-pointer text-xs shadow-xs"
             >
-              Nhập API Key ngay
+              {!storedKey ? 'Nhập API Key ngay' : 'Kiểm tra / Đổi API Key'}
             </button>
           </div>
         )}
@@ -440,12 +448,33 @@ export function DigitizeModal({
         {/* Form Body */}
         <div className="p-6 overflow-y-auto space-y-4">
           {error && (
-            <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-900 rounded-xl text-xs flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-              <div>
-                <strong className="block font-bold">Đã dừng do lỗi API:</strong>
-                <span className="leading-relaxed font-mono">{error}</span>
+            <div className="p-4 bg-rose-50 border-2 border-rose-300 text-rose-950 rounded-2xl text-xs space-y-3">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <strong className="block font-bold text-rose-900 text-sm">
+                    Đã dừng do lỗi API:
+                  </strong>
+                  <p className="leading-relaxed font-mono text-slate-800">{error}</p>
+                </div>
               </div>
+
+              {(error.toLowerCase().includes('api key') ||
+                error.toLowerCase().includes('api_key') ||
+                error.toLowerCase().includes('permission_denied')) && (
+                <div className="pt-2 border-t border-rose-200 flex flex-wrap items-center justify-between gap-2.5">
+                  <span className="text-[11px] text-rose-800">
+                    👉 Khóa API của bạn chưa chính xác hoặc đã hết hạn. Hãy lấy key mới từ Google AI Studio:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onOpenApiKeyModal?.()}
+                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs cursor-pointer shadow-xs"
+                  >
+                    Đổi API Key ngay
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

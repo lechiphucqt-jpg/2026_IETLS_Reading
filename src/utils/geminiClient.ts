@@ -2,9 +2,10 @@
  * Client-side Gemini API Integration with Automatic Fallback & Multimodal PDF Processing
  * Compliant with AI_INSTRUCTIONS.md:
  * - Default model: gemini-3-flash-preview
- * - Fallback models: gemini-3-flash-preview -> gemini-3-pro-preview -> gemini-2.5-flash -> gemini-2.0-flash
+ * - Fallback models: gemini-3-flash-preview -> gemini-3-pro-preview -> gemini-2.5-flash -> gemini-2.0-flash -> gemini-1.5-flash
  * - Dynamic retry on 429/quota exhaustion
  * - Client-side localStorage persistence
+ * - Robust API key validation & sanitization
  */
 
 export const STORAGE_KEYS = {
@@ -20,6 +21,15 @@ export const FALLBACK_MODELS = [
   'gemini-2.5-flash',
   'gemini-2.0-flash',
   'gemini-1.5-flash',
+];
+
+// Models with proven native PDF multimodal support
+export const PDF_SUPPORTED_MODELS = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-3-flash-preview',
+  'gemini-3-pro-preview',
 ];
 
 export const AVAILABLE_MODELS = [
@@ -47,20 +57,62 @@ export const AVAILABLE_MODELS = [
     badge: 'Dự phòng siêu bền',
     desc: 'Phản hồi nhanh, ổn định khi các model preview quá tải.',
   },
+  {
+    id: 'gemini-1.5-flash',
+    name: 'Gemini 1.5 Flash',
+    badge: 'Tương thích cao',
+    desc: 'Hỗ trợ đa phương thức và xử lý tài liệu PDF ổn định.',
+  },
 ];
+
+/**
+ * Sanitize API key: strips quotes, whitespace, accidental prefixes, and "undefined"/"null" strings
+ */
+export function cleanApiKey(raw: string | null | undefined): string {
+  if (!raw) return '';
+  let clean = raw.trim();
+
+  // Strip string literals like "undefined", "null", "[object Object]"
+  const lower = clean.toLowerCase();
+  if (
+    lower === 'undefined' ||
+    lower === 'null' ||
+    lower === '[object object]' ||
+    lower === 'none' ||
+    lower === 'your_api_key'
+  ) {
+    return '';
+  }
+
+  // Strip surrounding quotes: "AIzaSy..." or 'AIzaSy...'
+  if (
+    (clean.startsWith('"') && clean.endsWith('"')) ||
+    (clean.startsWith("'") && clean.endsWith("'"))
+  ) {
+    clean = clean.slice(1, -1).trim();
+  }
+
+  // Strip any accidental prefix like "Bearer " or "key="
+  if (clean.toLowerCase().startsWith('bearer ')) {
+    clean = clean.slice(7).trim();
+  }
+  if (clean.toLowerCase().startsWith('key=')) {
+    clean = clean.slice(4).trim();
+  }
+
+  return clean;
+}
 
 export function getStoredApiKey(): string {
   if (typeof window === 'undefined') return '';
-  return (
-    localStorage.getItem(STORAGE_KEYS.apiKey) ||
-    localStorage.getItem('GEMINI_API_KEY') ||
-    ''
-  ).trim();
+  const key1 = localStorage.getItem(STORAGE_KEYS.apiKey);
+  const key2 = localStorage.getItem('GEMINI_API_KEY');
+  return cleanApiKey(key1) || cleanApiKey(key2) || '';
 }
 
 export function setStoredApiKey(key: string): void {
   if (typeof window === 'undefined') return;
-  const clean = key.trim();
+  const clean = cleanApiKey(key);
   localStorage.setItem(STORAGE_KEYS.apiKey, clean);
   localStorage.setItem('GEMINI_API_KEY', clean);
 }
@@ -73,6 +125,43 @@ export function getStoredModel(): string {
 export function setStoredModel(model: string): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem(STORAGE_KEYS.selectedModel, model);
+}
+
+/**
+ * Validate Gemini API Key instantly via Google's /models endpoint without consuming generation quota
+ */
+export async function validateApiKey(rawKey: string): Promise<{ valid: boolean; message: string }> {
+  const clean = cleanApiKey(rawKey);
+  if (!clean) {
+    return { valid: false, message: 'Khóa API không được để trống.' };
+  }
+
+  if (!clean.startsWith('AIzaSy') || clean.length < 35) {
+    return {
+      valid: false,
+      message: 'Khóa API Gemini chuẩn của Google AI Studio luôn bắt đầu bằng "AIzaSy..." (khoảng 39 ký tự).',
+    };
+  }
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(clean)}`
+    );
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      const msg = errData?.error?.message || `HTTP ${res.status}`;
+      return {
+        valid: false,
+        message: `Google từ chối khóa API: "${msg}". Vui lòng tạo khóa mới tại https://aistudio.google.com/api-keys`,
+      };
+    }
+    return { valid: true, message: 'Khóa API hợp lệ! Đã kết nối thành công với Google AI Studio.' };
+  } catch (err) {
+    return {
+      valid: false,
+      message: err instanceof Error ? err.message : 'Không thể kết nối với máy chủ Google.',
+    };
+  }
 }
 
 export function fileToBase64(file: File): Promise<string> {
@@ -120,22 +209,28 @@ interface GenerateContentOptions {
   systemInstruction?: string;
   responseMimeType?: string;
   onModelAttempt?: (modelName: string, attemptIndex: number) => void;
+  candidateModelsOverride?: string[];
 }
 
 /**
  * Execute Gemini call with automatic fallback across models when error occurs
  */
-export async function callGeminiWithFallback(options: GenerateContentOptions): Promise<{ text: string; modelUsed: string }> {
+export async function callGeminiWithFallback(
+  options: GenerateContentOptions
+): Promise<{ text: string; modelUsed: string }> {
   const apiKey = getStoredApiKey();
   if (!apiKey) {
-    throw new Error('Chưa cấu hình API Key. Vui lòng bấm "API Key" trên góc màn hình để nhập khóa Gemini.');
+    throw new Error(
+      'Chưa cấu hình API Key. Vui lòng bấm vào nút "API Key" ở góc trên màn hình để nhập khóa Gemini từ Google AI Studio (https://aistudio.google.com/api-keys).'
+    );
   }
 
   const preferredModel = getStoredModel();
+  const modelsList = options.candidateModelsOverride || FALLBACK_MODELS;
   // Build priority model list starting with the preferred model
   const candidateModels = [
     preferredModel,
-    ...FALLBACK_MODELS.filter((m) => m !== preferredModel),
+    ...modelsList.filter((m) => m !== preferredModel),
   ];
 
   let lastError: Error | null = null;
@@ -178,9 +273,23 @@ export async function callGeminiWithFallback(options: GenerateContentOptions): P
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         const errMessage = errorData?.error?.message || `HTTP ${response.status} ${response.statusText}`;
+
+        // CRITICAL: If Google reports API Key is invalid, DO NOT loop through other models!
+        // An invalid key will fail on every single model. Halt immediately and tell the user!
+        const lowerErr = errMessage.toLowerCase();
+        if (
+          lowerErr.includes('api key not valid') ||
+          lowerErr.includes('api_key_invalid') ||
+          lowerErr.includes('permission_denied')
+        ) {
+          throw new Error(
+            `Khóa Gemini API Key của bạn không hợp lệ hoặc đã bị vô hiệu hóa (Google báo lỗi: "${errMessage}"). Vui lòng bấm nút "Đổi API Key" để dán khóa API mới từ Google AI Studio (https://aistudio.google.com/api-keys).`
+          );
+        }
+
         console.warn(`[Gemini Fallback] Model ${model} failed: ${errMessage}. Attempting next model...`);
         lastError = new Error(`Model ${model}: ${errMessage}`);
-        continue; // Try next model in fallback list
+        continue; // Try next model in fallback list for 429 quota or temporary issues
       }
 
       const data = await response.json();
@@ -191,6 +300,10 @@ export async function callGeminiWithFallback(options: GenerateContentOptions): P
 
       return { text: outputText, modelUsed: model };
     } catch (err) {
+      // Re-throw immediately if it's our invalid API key error
+      if (err instanceof Error && err.message.includes('API Key của bạn không hợp lệ')) {
+        throw err;
+      }
       console.warn(`[Gemini Fallback] Error with ${model}:`, err);
       lastError = err instanceof Error ? err : new Error(String(err));
       // Continue to next model
@@ -269,9 +382,17 @@ export async function digitizeFromPdfOrImage(
   },
   onStatusUpdate?: (status: string) => void
 ): Promise<DigitizePassageResult> {
+  const currentKey = getStoredApiKey();
+  if (!currentKey) {
+    throw new Error(
+      'Chưa cấu hình API Key. Vui lòng bấm vào nút "API Key" ở góc trên màn hình để nhập khóa Gemini từ Google AI Studio (https://aistudio.google.com/api-keys).'
+    );
+  }
+
   onStatusUpdate?.('Đang mã hóa tệp PDF/ảnh bài đọc...');
   const base64Data = await fileToBase64(file);
-  const mimeType = file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+  const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+  const mimeType = isPdf ? 'application/pdf' : (file.type || 'image/jpeg');
 
   onStatusUpdate?.('Đang gửi dữ liệu đến AI và nhận diện cấu trúc sách bài tập...');
 
@@ -325,6 +446,9 @@ Trả về duy nhất JSON theo cấu trúc:
   ]
 }`;
 
+  // For multimodal PDF processing, prioritize models that support inlineData PDF natively
+  const candidateModels = PDF_SUPPORTED_MODELS;
+
   const { text } = await callGeminiWithFallback({
     contents: [
       {
@@ -336,6 +460,7 @@ Trả về duy nhất JSON theo cấu trúc:
     ],
     systemInstruction: IELTS_SYSTEM_PROMPT,
     responseMimeType: 'application/json',
+    candidateModelsOverride: candidateModels,
     onModelAttempt: (modelName, idx) => {
       onStatusUpdate?.(
         idx === 0

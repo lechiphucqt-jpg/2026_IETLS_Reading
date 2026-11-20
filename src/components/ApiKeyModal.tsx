@@ -8,14 +8,16 @@ import {
   Sparkles,
   ShieldCheck,
   Cpu,
+  RefreshCw,
 } from 'lucide-react';
 import {
   AVAILABLE_MODELS,
+  cleanApiKey,
   getStoredApiKey,
   getStoredModel,
   setStoredApiKey,
   setStoredModel,
-  callGeminiWithFallback,
+  validateApiKey,
 } from '../utils/geminiClient';
 
 interface ApiKeyModalProps {
@@ -49,15 +51,23 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 
   if (!isOpen) return null;
 
+  const clean = cleanApiKey(apiKey);
+  const isLikelyValidFormat = clean.startsWith('AIzaSy') && clean.length >= 35;
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanKey = apiKey.trim();
-    if (!cleanKey) return;
+    if (!clean) {
+      setTestResult({
+        ok: false,
+        message: 'Vui lòng nhập khóa API trước khi lưu.',
+      });
+      return;
+    }
 
-    setStoredApiKey(cleanKey);
+    setStoredApiKey(clean);
     setStoredModel(selectedModel);
     setSavedSuccess(true);
-    onSaved?.(cleanKey);
+    onSaved?.(clean);
 
     setTimeout(() => {
       onClose();
@@ -65,11 +75,10 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   };
 
   const handleTestConnection = async () => {
-    const cleanKey = apiKey.trim();
-    if (!cleanKey) {
+    if (!clean) {
       setTestResult({
         ok: false,
-        message: 'Vui lòng nhập API Key trước khi kiểm tra.',
+        message: 'Vui lòng nhập khóa API trước khi kiểm tra.',
       });
       return;
     }
@@ -77,34 +86,12 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     setTesting(true);
     setTestResult(null);
 
-    // Temporarily set to test
-    setStoredApiKey(cleanKey);
-    setStoredModel(selectedModel);
-
-    try {
-      const res = await callGeminiWithFallback({
-        contents: [
-          {
-            parts: [{ text: 'Trả về chuỗi JSON {"status": "ok", "message": "connected"}' }],
-          },
-        ],
-        responseMimeType: 'application/json',
-      });
-      setTestResult({
-        ok: true,
-        message: `Kết nối thành công qua ${res.modelUsed}! Khóa API hoàn toàn hợp lệ.`,
-      });
-    } catch (err: unknown) {
-      setTestResult({
-        ok: false,
-        message:
-          err instanceof Error
-            ? err.message
-            : 'Không thể kết nối với Gemini API. Vui lòng kiểm tra lại khóa.',
-      });
-    } finally {
-      setTesting(false);
-    }
+    const result = await validateApiKey(clean);
+    setTestResult({
+      ok: result.valid,
+      message: result.message,
+    });
+    setTesting(false);
   };
 
   return (
@@ -126,7 +113,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                 Cài đặt Gemini API Key & Model AI
               </h2>
               <p className="text-xs text-teal-200">
-                Để số hóa sách PDF, tạo bài tập và phát âm Shadowing
+                Để số hóa sách PDF, làm bài tập và phát âm Shadowing
               </p>
             </div>
           </div>
@@ -142,24 +129,27 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 
         <form onSubmit={handleSave} className="p-6 space-y-5 overflow-y-auto">
           {/* Instructions Link */}
-          <div className="p-4 bg-amber-50/80 border border-amber-200 rounded-xl flex items-start gap-3 text-xs text-slate-800">
+          <div className="p-4 bg-amber-50/90 border border-amber-300 rounded-2xl flex items-start gap-3 text-xs text-slate-800">
             <Sparkles className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
             <div className="space-y-1">
-              <span className="font-bold block text-amber-900">
-                Chưa có khóa API hoặc hết hạn mức (Quota)?
+              <span className="font-bold block text-amber-950">
+                Lấy khóa Gemini API Key miễn phí từ Google:
               </span>
-              <p className="text-slate-600 leading-relaxed">
-                Google cung cấp API Key Gemini hoàn toàn miễn phí. Bạn có thể tạo khóa mới trong 30 giây tại Google AI Studio:
+              <p className="text-slate-700 leading-relaxed">
+                1. Nhấp vào liên kết bên dưới để mở trang <strong>Google AI Studio</strong>:
               </p>
               <a
                 href="https://aistudio.google.com/api-keys"
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 font-bold text-teal-800 hover:text-teal-950 underline pt-1"
+                className="inline-flex items-center gap-1.5 font-bold text-teal-800 hover:text-teal-950 underline py-0.5"
               >
                 https://aistudio.google.com/api-keys
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
+              <p className="text-slate-600 text-[11px] leading-relaxed">
+                2. Nhấn nút <strong>"Create API key"</strong>, sao chép khóa (bắt đầu bằng <code>AIzaSy...</code>) và dán vào ô bên dưới.
+              </p>
             </div>
           </div>
 
@@ -173,20 +163,49 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                 Khóa Gemini API Key của bạn <span className="text-red-500">*</span>
               </label>
               <span className="text-[11px] text-teal-800 font-medium flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5" /> Lưu an toàn trên máy
+                <ShieldCheck className="w-3.5 h-3.5" /> Lưu trực tiếp trên trình duyệt
               </span>
             </div>
-            <input
-              id="gemini-api-key-input"
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="AIzaSy..."
-              required
-              className="w-full bg-slate-50 border border-slate-300 focus:bg-white focus:border-teal-700 focus:ring-2 focus:ring-teal-700/20 rounded-xl px-4 py-2.5 text-sm font-mono text-slate-900 outline-none transition-all"
-            />
+            <div className="relative">
+              <input
+                id="gemini-api-key-input"
+                type="text"
+                value={apiKey}
+                onChange={(e) => {
+                  setApiKey(e.target.value);
+                  setTestResult(null);
+                }}
+                placeholder="AIzaSy..."
+                required
+                className={`w-full bg-slate-50 border rounded-xl px-4 py-2.5 text-xs sm:text-sm font-mono text-slate-900 outline-none transition-all ${
+                  apiKey.trim() && !isLikelyValidFormat
+                    ? 'border-amber-400 focus:border-amber-500'
+                    : 'border-slate-300 focus:border-teal-700 focus:ring-2 focus:ring-teal-700/20'
+                }`}
+              />
+              {apiKey.trim() && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setApiKey('');
+                    setTestResult(null);
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+                >
+                  Xóa
+                </button>
+              )}
+            </div>
+
+            {/* Format Warning */}
+            {apiKey.trim() && !isLikelyValidFormat && (
+              <div className="mt-1.5 text-[11px] text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                ⚠️ Khóa API chuẩn của Google Gemini luôn bắt đầu bằng <strong>"AIzaSy..."</strong> (dài khoảng 39 ký tự). Hãy chắc chắn bạn đã sao chép đúng từ trang Google AI Studio.
+              </div>
+            )}
+
             <p className="text-[11px] text-slate-500 mt-1">
-              Khóa API được lưu cục bộ trong trình duyệt (localStorage), không gửi về máy chủ thứ ba.
+              Khóa API được lưu an toàn trong <code>localStorage</code>, không gửi về bất kỳ máy chủ trung gian nào.
             </p>
           </div>
 
@@ -227,17 +246,17 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               })}
             </div>
             <p className="text-[11px] text-slate-500 mt-2 bg-slate-100 p-2 rounded-lg">
-              ℹ️ <strong>Cơ chế Retry & Fallback:</strong> Nếu model gặp lỗi hạn mức (429 RESOURCE_EXHAUSTED), hệ thống sẽ tự động chuyển sang model tiếp theo trong danh sách mà không làm gián đoạn bài đọc.
+              ℹ️ <strong>Cơ chế Retry & Fallback:</strong> Nếu model gặp lỗi hạn mức (429 RESOURCE_EXHAUSTED), hệ thống tự động chuyển sang model tiếp theo trong danh sách mà không làm gián đoạn bài đọc.
             </p>
           </div>
 
           {/* Test connection output */}
           {testResult && (
             <div
-              className={`p-3 rounded-xl text-xs flex items-start gap-2.5 ${
+              className={`p-3.5 rounded-xl text-xs flex items-start gap-2.5 ${
                 testResult.ok
-                  ? 'bg-emerald-50 border border-emerald-200 text-emerald-900'
-                  : 'bg-rose-50 border border-rose-200 text-rose-900'
+                  ? 'bg-emerald-50 border border-emerald-300 text-emerald-950'
+                  : 'bg-rose-50 border border-rose-300 text-rose-950'
               }`}
             >
               {testResult.ok ? (
@@ -245,7 +264,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               ) : (
                 <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
               )}
-              <div className="leading-relaxed">{testResult.message}</div>
+              <div className="leading-relaxed font-medium">{testResult.message}</div>
             </div>
           )}
 
@@ -260,11 +279,18 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
           <div className="flex items-center justify-between pt-3 border-t border-slate-200">
             <button
               type="button"
-              disabled={testing || !apiKey.trim()}
+              disabled={testing || !clean}
               onClick={handleTestConnection}
-              className="px-3.5 py-2 text-xs font-semibold text-teal-800 hover:text-teal-950 hover:bg-teal-50 border border-teal-200 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-teal-800 hover:text-teal-950 hover:bg-teal-50 border border-teal-200 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
             >
-              {testing ? 'Đang kiểm tra...' : 'Kiểm tra kết nối'}
+              {testing ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  Đang kiểm tra...
+                </>
+              ) : (
+                'Kiểm tra kết nối'
+              )}
             </button>
 
             <div className="flex items-center gap-2">
@@ -277,7 +303,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               </button>
               <button
                 type="submit"
-                disabled={!apiKey.trim()}
+                disabled={!clean}
                 className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-teal-800 hover:bg-teal-900 rounded-xl transition-colors cursor-pointer disabled:opacity-50 shadow-xs"
               >
                 <Check className="w-3.5 h-3.5" />
