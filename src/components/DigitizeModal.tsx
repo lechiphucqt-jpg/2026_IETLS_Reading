@@ -65,12 +65,14 @@ export function DigitizeModal({
   // PDF Book Digitize state
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfSourceBook, setPdfSourceBook] = useState(SOURCE_BOOKS[0]);
+  const [customPdfSource, setCustomPdfSource] = useState('');
   const [pdfTopic, setPdfTopic] = useState(IELTS_TOPICS[0]);
   const [pdfBandLevel, setPdfBandLevel] = useState('Band 7.0');
 
   // Passage text digitizer state
   const [title, setTitle] = useState('');
   const [sourceBook, setSourceBook] = useState(SOURCE_BOOKS[0]);
+  const [customSourceBook, setCustomSourceBook] = useState('');
   const [topic, setTopic] = useState(IELTS_TOPICS[0]);
   const [bandLevel, setBandLevel] = useState('Band 7.0');
   const [questionCount, setQuestionCount] = useState(5);
@@ -102,6 +104,11 @@ export function DigitizeModal({
       return;
     }
 
+    const effectivePdfSource =
+      pdfSourceBook === 'Khác'
+        ? customPdfSource.trim() || 'Tài liệu tự số hóa'
+        : pdfSourceBook;
+
     setLoading(true);
     setError(null);
     setStatusMessage('Đang chuẩn bị tệp PDF...');
@@ -110,7 +117,7 @@ export function DigitizeModal({
       const data = await digitizeFromPdfOrImage(
         pdfFile,
         {
-          sourceBook: pdfSourceBook,
+          sourceBook: effectivePdfSource,
           topic: pdfTopic,
           bandLevel: pdfBandLevel,
         },
@@ -147,8 +154,8 @@ export function DigitizeModal({
         id: passageId,
         title: data.title || pdfFile.name.replace(/\.[^/.]+$/, ''),
         subtitle: data.subtitle || 'Số hóa tự động từ sách PDF bài tập',
-        sourceBook: pdfSourceBook,
-        testRef: `${pdfSourceBook} · Sách số hóa`,
+        sourceBook: effectivePdfSource,
+        testRef: `${effectivePdfSource} · Sách số hóa`,
         topic: data.topic || pdfTopic,
         bandLevel: data.bandLevel || pdfBandLevel,
         difficulty: 'Passage 2',
@@ -243,12 +250,17 @@ export function DigitizeModal({
         },
       }));
 
+      const effectiveSource =
+        sourceBook === 'Khác'
+          ? customSourceBook.trim() || 'Tài liệu tự số hóa'
+          : sourceBook;
+
       const newPassage: ReadingPassage = {
         id: passageId,
         title: data.title || title || 'IELTS Academic Reading',
         subtitle: data.subtitle || 'Văn bản số hóa tự động',
-        sourceBook,
-        testRef: `${sourceBook} · Custom Passage`,
+        sourceBook: effectiveSource,
+        testRef: `${effectiveSource} · Custom Passage`,
         topic: data.topic || topic,
         bandLevel: data.bandLevel || bandLevel,
         difficulty: 'Passage 2',
@@ -529,6 +541,7 @@ export function DigitizeModal({
                         {b}
                       </option>
                     ))}
+                    <option value="Khác">Khác (Tự nhập tên tài liệu...)</option>
                   </select>
                 </div>
 
@@ -561,6 +574,31 @@ export function DigitizeModal({
                     <option value="Band 6.0-6.5">Band 6.0 - 6.5</option>
                     <option value="Band 7.0">Band 7.0</option>
                     <option value="Band 7.5">Band 7.5</option>
+                    <option value="Band 8.0+">Band 8.0+</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Custom Source Book Input when "Khác" is selected */}
+              {pdfSourceBook === 'Khác' && (
+                <div className="p-3 bg-teal-50/70 border border-teal-300 rounded-2xl space-y-1.5 animate-in fade-in duration-200 shadow-xs">
+                  <label className="block text-xs font-bold text-teal-900">
+                    Nhập tên tài liệu / nguồn sách mà bạn muốn <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={customPdfSource}
+                    onChange={(e) => setCustomPdfSource(e.target.value)}
+                    placeholder="VD: Cambridge IELTS 19, The Economist, Collins Reading, Sách giáo trình..."
+                    className="w-full bg-white border border-teal-400 focus:border-teal-700 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-900 placeholder:text-slate-400 outline-none shadow-xs"
+                    autoFocus
+                  />
+                  <p className="text-[11px] text-teal-700">
+                    Tên tài liệu này sẽ được lưu và gắn trực tiếp vào bài đọc cũng như bộ lọc thư viện.
+                  </p>
+                </div>
+              )}
                     <option value="Band 8.0+">Band 8.0+</option>
                   </select>
                 </div>
@@ -607,10 +645,10 @@ export function DigitizeModal({
           {/* TAB 2: RAW TEXT DIGITIZER */}
           {tab === 'passage' && (
             <form onSubmit={handleDigitizePassage} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Tiêu đề (Tùy chọn)
+                    Tiêu đề bài đọc (Tùy chọn)
                   </label>
                   <input
                     type="text"
@@ -622,7 +660,44 @@ export function DigitizeModal({
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Chủ đề
+                    Nguồn sách / Tài liệu
+                  </label>
+                  <select
+                    value={sourceBook}
+                    onChange={(e) => setSourceBook(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium text-slate-900"
+                  >
+                    {SOURCE_BOOKS.map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                    <option value="Khác">Khác (Tự nhập tên tài liệu...)</option>
+                  </select>
+                </div>
+              </div>
+
+              {sourceBook === 'Khác' && (
+                <div className="p-3 bg-teal-50/70 border border-teal-300 rounded-2xl space-y-1.5 animate-in fade-in duration-200 shadow-xs">
+                  <label className="block text-xs font-bold text-teal-900">
+                    Nhập tên tài liệu / nguồn sách mà bạn muốn <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={customSourceBook}
+                    onChange={(e) => setCustomSourceBook(e.target.value)}
+                    placeholder="VD: Cambridge IELTS 19, The Economist, Collins Reading..."
+                    className="w-full bg-white border border-teal-400 focus:border-teal-700 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-900 placeholder:text-slate-400 outline-none shadow-xs"
+                    autoFocus
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Chủ đề IELTS
                   </label>
                   <select
                     value={topic}

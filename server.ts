@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
@@ -43,7 +44,54 @@ function handleApiError(res: express.Response, err: unknown, fallbackMsg: string
 
 async function startServer() {
   const app = express();
-  app.use(express.json({ limit: '4mb' }));
+  app.use(express.json({ limit: '10mb' }));
+
+  // 0. Save Brand Logo directly to project system files
+  app.post('/api/save-logo', async (req, res) => {
+    try {
+      const { base64Data } = req.body as {
+        base64Data?: string;
+      };
+      if (!base64Data) {
+        res.status(400).json({ error: 'Không có dữ liệu logo.' });
+        return;
+      }
+
+      const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      const buffer = matches ? Buffer.from(matches[2], 'base64') : Buffer.from(base64Data, 'base64');
+
+      const publicDir = path.resolve(__dirname, 'public');
+      const assetsDir = path.resolve(__dirname, 'src', 'assets');
+      const dataDir = path.resolve(__dirname, 'src', 'data');
+      if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
+      if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true });
+      if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+
+      // Save as public/brand-logo.png and src/assets/brand-logo.png
+      fs.writeFileSync(path.join(publicDir, 'brand-logo.png'), buffer);
+      fs.writeFileSync(path.join(assetsDir, 'brand-logo.png'), buffer);
+
+      // Save brandConfig.json
+      const configPath = path.join(dataDir, 'brandConfig.json');
+      fs.writeFileSync(
+        configPath,
+        JSON.stringify(
+          {
+            brandName: 'Tiếng Anh Thầy Phúc',
+            logoUrl: base64Data,
+            savedAt: new Date().toISOString(),
+          },
+          null,
+          2
+        )
+      );
+
+      res.json({ success: true, message: 'Đã lưu logo vào file hệ thống thành công!' });
+    } catch (err) {
+      console.error('[Save Logo Error]', err);
+      res.status(500).json({ error: 'Không thể lưu logo vào file hệ thống.' });
+    }
+  });
 
   // 1. Contextual Word Lookup for Smart Vocabulary Notebook
   app.post('/api/lookup-word', async (req, res) => {
