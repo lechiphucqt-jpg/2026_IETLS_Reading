@@ -136,13 +136,6 @@ export async function validateApiKey(rawKey: string): Promise<{ valid: boolean; 
     return { valid: false, message: 'Khóa API không được để trống.' };
   }
 
-  if (!clean.startsWith('AIzaSy') || clean.length < 35) {
-    return {
-      valid: false,
-      message: 'Khóa API Gemini chuẩn của Google AI Studio luôn bắt đầu bằng "AIzaSy..." (khoảng 39 ký tự).',
-    };
-  }
-
   try {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(clean)}`
@@ -152,7 +145,7 @@ export async function validateApiKey(rawKey: string): Promise<{ valid: boolean; 
       const msg = errData?.error?.message || `HTTP ${res.status}`;
       return {
         valid: false,
-        message: `Google từ chối khóa API: "${msg}". Vui lòng tạo khóa mới tại https://aistudio.google.com/api-keys`,
+        message: `Google từ chối khóa API: "${msg}". Vui lòng kiểm tra lại khóa tại https://aistudio.google.com/api-keys`,
       };
     }
     return { valid: true, message: 'Khóa API hợp lệ! Đã kết nối thành công với Google AI Studio.' };

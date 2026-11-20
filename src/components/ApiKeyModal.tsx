@@ -52,7 +52,6 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   if (!isOpen) return null;
 
   const clean = cleanApiKey(apiKey);
-  const isLikelyValidFormat = clean.startsWith('AIzaSy') && clean.length >= 35;
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,11 +176,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                 }}
                 placeholder="AIzaSy..."
                 required
-                className={`w-full bg-slate-50 border rounded-xl px-4 py-2.5 text-xs sm:text-sm font-mono text-slate-900 outline-none transition-all ${
-                  apiKey.trim() && !isLikelyValidFormat
-                    ? 'border-amber-400 focus:border-amber-500'
-                    : 'border-slate-300 focus:border-teal-700 focus:ring-2 focus:ring-teal-700/20'
-                }`}
+                className="w-full bg-slate-50 border border-slate-300 focus:bg-white focus:border-teal-700 focus:ring-2 focus:ring-teal-700/20 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-mono text-slate-900 outline-none transition-all"
               />
               {apiKey.trim() && (
                 <button
@@ -196,13 +191,6 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                 </button>
               )}
             </div>
-
-            {/* Format Warning */}
-            {apiKey.trim() && !isLikelyValidFormat && (
-              <div className="mt-1.5 text-[11px] text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200">
-                ⚠️ Khóa API chuẩn của Google Gemini luôn bắt đầu bằng <strong>"AIzaSy..."</strong> (dài khoảng 39 ký tự). Hãy chắc chắn bạn đã sao chép đúng từ trang Google AI Studio.
-              </div>
-            )}
 
             <p className="text-[11px] text-slate-500 mt-1">
               Khóa API được lưu an toàn trong <code>localStorage</code>, không gửi về bất kỳ máy chủ trung gian nào.

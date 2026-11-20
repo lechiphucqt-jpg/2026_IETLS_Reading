@@ -88,7 +88,7 @@ export function DigitizeModal({
   if (!isOpen) return null;
 
   const storedKey = getStoredApiKey();
-  const hasValidKey = storedKey.startsWith('AIzaSy') && storedKey.length >= 35;
+  const hasApiKey = Boolean(storedKey && storedKey.length > 5);
 
   const handlePdfUpload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,13 +97,8 @@ export function DigitizeModal({
       return;
     }
 
-    if (!storedKey) {
-      setError('Bạn chưa nhập Gemini API Key. Vui lòng bấm nút "Đổi API Key ngay" bên dưới để nhập khóa API từ Google AI Studio.');
-      return;
-    }
-
-    if (!hasValidKey) {
-      setError('Khóa API hiện tại không đúng định dạng của Google Gemini (phải bắt đầu bằng "AIzaSy..."). Vui lòng bấm nút "Đổi API Key ngay" bên dưới để dán lại khóa.');
+    if (!hasApiKey) {
+      setError('Bạn chưa nhập Gemini API Key. Vui lòng bấm nút "Cài đặt API Key" để nhập khóa từ Google AI Studio.');
       return;
     }
 
@@ -373,23 +368,19 @@ export function DigitizeModal({
           </button>
         </div>
 
-        {/* API Key Status Alert */}
-        {!hasValidKey && (
+        {/* Missing API Key Alert */}
+        {!hasApiKey && (
           <div className="p-3.5 bg-amber-50 border-b border-amber-300 text-amber-950 text-xs flex flex-wrap items-center justify-between gap-3 px-6">
             <div className="flex items-center gap-2.5">
               <Key className="w-4 h-4 text-amber-700 shrink-0" />
-              <span>
-                {!storedKey
-                  ? 'Bạn chưa cài đặt khóa Gemini API Key để số hóa tệp.'
-                  : 'Khóa API Key hiện tại có thể không hợp lệ (phải bắt đầu bằng "AIzaSy...").'}
-              </span>
+              <span>Bạn chưa cài đặt khóa Gemini API Key để số hóa bài đọc & tệp PDF.</span>
             </div>
             <button
               type="button"
               onClick={() => onOpenApiKeyModal?.()}
-              className="font-bold px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl cursor-pointer text-xs shadow-xs"
+              className="font-bold px-3.5 py-1.5 bg-teal-800 hover:bg-teal-900 text-white rounded-xl cursor-pointer text-xs shadow-xs"
             >
-              {!storedKey ? 'Nhập API Key ngay' : 'Kiểm tra / Đổi API Key'}
+              Nhập API Key ngay
             </button>
           </div>
         )}
