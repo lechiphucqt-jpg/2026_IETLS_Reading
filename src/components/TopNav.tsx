@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Camera, Key, Sparkles } from 'lucide-react';
+import { Camera, HardDrive, Key, Sparkles } from 'lucide-react';
 import { AppView } from '../types/ielts';
 import { getStoredApiKey } from '../utils/geminiClient';
 import defaultBrandConfig from '../data/brandConfig.json';
@@ -10,6 +10,7 @@ interface TopNavProps {
   onNavigate: (view: AppView) => void;
   onOpenDigitize: () => void;
   onOpenApiKeyModal: () => void;
+  onOpenDataModal?: () => void;
 }
 
 const NAV_ITEMS: { id: AppView; label: string }[] = [
@@ -25,6 +26,7 @@ export function TopNav({
   onNavigate,
   onOpenDigitize,
   onOpenApiKeyModal,
+  onOpenDataModal,
 }: TopNavProps) {
   const hasKey = Boolean(getStoredApiKey());
   const [isLogoModalOpen, setIsLogoModalOpen] = useState(false);
@@ -103,8 +105,21 @@ export function TopNav({
           })}
         </nav>
 
-        {/* Action Zone: API Key Button & Digitize Action */}
+        {/* Action Zone: Data Management, API Key Button & Digitize Action */}
         <div className="flex items-center gap-2.5 shrink-0">
+          {/* Local Data Management (Backup / Restore) Button */}
+          {onOpenDataModal && (
+            <button
+              type="button"
+              onClick={onOpenDataModal}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl border border-teal-300 bg-teal-50/90 text-teal-900 hover:bg-teal-100 transition-colors whitespace-nowrap cursor-pointer shadow-xs"
+              title="Quản lý lưu trữ & Sao lưu dữ liệu về máy tính (.json)"
+            >
+              <HardDrive className="w-3.5 h-3.5 text-teal-700 shrink-0" />
+              <span className="hidden md:inline">Dữ liệu máy</span>
+            </button>
+          )}
+
           {/* Settings (API Key) Button with RED text per AI_INSTRUCTIONS.md line 25 */}
           <button
             type="button"

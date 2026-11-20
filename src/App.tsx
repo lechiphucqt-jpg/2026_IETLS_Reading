@@ -10,7 +10,16 @@ import { DigitizeModal } from './components/DigitizeModal';
 import { PreteachVocabularyView } from './components/PreteachVocabularyView';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { ExportModal } from './components/ExportModal';
+import { DataManagementModal } from './components/DataManagementModal';
 import { getStoredApiKey } from './utils/geminiClient';
+import {
+  loadAnnotationsFromIndexedDB,
+  loadPassagesFromIndexedDB,
+  loadVocabFromIndexedDB,
+  saveAnnotationsToIndexedDB,
+  savePassagesToIndexedDB,
+  saveVocabToIndexedDB,
+} from './utils/localDatabase';
 
 const STORAGE_KEYS = {
   passages: 'lexiband_passages_v1',
@@ -51,10 +60,68 @@ export default function App() {
   }>({ open: false, tab: 'pdf' });
 
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
+  const [dataModalOpen, setDataModalOpen] = useState(false);
   const [exportModal, setExportModal] = useState<{
     open: boolean;
     passageId: string;
   }>({ open: false, passageId: '' });
+
+  // Load from IndexedDB on startup (overrides default/localStorage if IndexedDB has data)
+  useEffect(() => {
+    let isMounted = true;
+    async function initFromLocalDb() {
+      try {
+        const [idbPassages, idbVocab, idbAnnotations] = await Promise.all([
+          loadPassagesFromIndexedDB(),
+          loadVocabFromIndexedDB(),
+          loadAnnotationsFromIndexedDB(),
+        ]);
+
+        if (isMounted) {
+          if (idbPassages && idbPassages.length > 0) {
+            setPassages(idbPassages);
+            setActivePassageId((prev) =>
+              idbPassages.some((p) => p.id === prev) ? prev : idbPassages[0].id
+            );
+          } else {
+            savePassagesToIndexedDB(passages);
+          }
+
+          if (idbVocab && idbVocab.length > 0) {
+            setVocab(idbVocab);
+          } else {
+            saveVocabToIndexedDB(vocab);
+          }
+
+          if (idbAnnotations && idbAnnotations.length > 0) {
+            setAnnotations(idbAnnotations);
+          } else if (annotations.length > 0) {
+            saveAnnotationsToIndexedDB(annotations);
+          }
+        }
+      } catch (err) {
+        console.warn('Init from IndexedDB skipped:', err);
+      }
+    }
+
+    initFromLocalDb();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Sync state changes to IndexedDB
+  useEffect(() => {
+    savePassagesToIndexedDB(passages);
+  }, [passages]);
+
+  useEffect(() => {
+    saveVocabToIndexedDB(vocab);
+  }, [vocab]);
+
+  useEffect(() => {
+    saveAnnotationsToIndexedDB(annotations);
+  }, [annotations]);
 
   // Prompt user for API key on first startup if not already stored
   useEffect(() => {
@@ -211,6 +278,47 @@ export default function App() {
     setActiveView('vocabulary');
   };
 
+  const handleRestoreData = (
+    restored: {
+      passages: ReadingPassage[];
+      vocab: VocabEntry[];
+      annotations: TextAnnotation[];
+    },
+    mode: 'overwrite' | 'merge'
+  ) => {
+    if (mode === 'overwrite') {
+      setPassages(restored.passages);
+      setVocab(restored.vocab);
+      setAnnotations(restored.annotations);
+      if (restored.passages.length > 0) {
+        setActivePassageId(restored.passages[0].id);
+      }
+    } else {
+      setPassages((prev) => {
+        const existingIds = new Set(prev.map((p) => p.id));
+        const newOnes = restored.passages.filter((p) => !existingIds.has(p.id));
+        return [...newOnes, ...prev];
+      });
+      setVocab((prev) => {
+        const existingKeys = new Set(
+          prev.map((v) => `${v.passageId}_${v.word.toLowerCase()}`)
+        );
+        const newOnes = restored.vocab.filter(
+          (v) => !existingKeys.has(`${v.passageId}_${v.word.toLowerCase()}`)
+        );
+        return [...newOnes, ...prev];
+      });
+      setAnnotations((prev) => [...restored.annotations, ...prev]);
+    }
+  };
+
+  const handleResetToDefaults = () => {
+    setPassages(INITIAL_PASSAGES);
+    setVocab(INITIAL_VOCAB);
+    setAnnotations([]);
+    setActivePassageId(INITIAL_PASSAGES[0].id);
+  };
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 font-sans antialiased">
       {/* Top Navigation Bar with Settings (API Key) & Digitize buttons */}
@@ -219,6 +327,7 @@ export default function App() {
         onNavigate={setActiveView}
         onOpenDigitize={() => setDigitizeModal({ open: true, tab: 'pdf' })}
         onOpenApiKeyModal={() => setApiKeyModalOpen(true)}
+        onOpenDataModal={() => setDataModalOpen(true)}
       />
 
       {/* VIEW 1: Library View */}
@@ -245,6 +354,7 @@ export default function App() {
           onNavigateVocab={() => setActiveView('vocabulary')}
           onDeletePassage={handleDeletePassage}
           onUpdatePassageImage={handleUpdatePassageImage}
+          onOpenDataModal={() => setDataModalOpen(true)}
         />
       )}
 
@@ -327,6 +437,17 @@ export default function App() {
         onClose={() => setExportModal({ open: false, passageId: '' })}
         passage={exportPassage}
         vocab={vocab}
+      />
+
+      {/* Local Data Management & Backup / Restore Modal */}
+      <DataManagementModal
+        isOpen={dataModalOpen}
+        onClose={() => setDataModalOpen(false)}
+        passages={passages}
+        vocab={vocab}
+        annotations={annotations}
+        onRestoreData={handleRestoreData}
+        onResetToDefaults={handleResetToDefaults}
       />
     </div>
   );

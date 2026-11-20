@@ -5,6 +5,7 @@ import {
   BookOpen,
   Camera,
   Download,
+  HardDrive,
   Headphones,
   Plus,
   Presentation,
@@ -27,6 +28,7 @@ interface LibraryViewProps {
   onNavigateVocab: () => void;
   onDeletePassage?: (passageId: string) => void;
   onUpdatePassageImage?: (passageId: string, imageUrl: string | undefined) => void;
+  onOpenDataModal?: () => void;
 }
 
 export function LibraryView({
@@ -40,6 +42,7 @@ export function LibraryView({
   onNavigateVocab,
   onDeletePassage,
   onUpdatePassageImage,
+  onOpenDataModal,
 }: LibraryViewProps) {
   const [selectedBook, setSelectedBook] = useState<string>('Tất cả');
   const [selectedTopic, setSelectedTopic] = useState<string>('Tất cả');
@@ -123,6 +126,25 @@ export function LibraryView({
               Từ yếu cần ôn
             </div>
           </button>
+          {onOpenDataModal && (
+            <>
+              <div className="h-8 w-px bg-slate-200" aria-hidden="true" />
+              <button
+                type="button"
+                onClick={onOpenDataModal}
+                className="text-left group cursor-pointer"
+                title="Sao lưu & Khôi phục dữ liệu trên máy tính (.json)"
+              >
+                <div className="flex items-center gap-1 font-mono text-xs font-bold text-teal-800 group-hover:text-teal-900">
+                  <HardDrive className="w-3.5 h-3.5" />
+                  <span>Sao lưu / Nạp</span>
+                </div>
+                <div className="text-xs text-slate-500 group-hover:text-slate-800 mt-0.5 underline decoration-slate-300 underline-offset-4">
+                  Dữ liệu máy (.json)
+                </div>
+              </button>
+            </>
+          )}
         </div>
       </section>
 
