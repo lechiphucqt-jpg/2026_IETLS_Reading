@@ -599,10 +599,6 @@ export function DigitizeModal({
                   </p>
                 </div>
               )}
-                    <option value="Band 8.0+">Band 8.0+</option>
-                  </select>
-                </div>
-              </div>
 
               {/* Status Message while loading */}
               {loading && (
