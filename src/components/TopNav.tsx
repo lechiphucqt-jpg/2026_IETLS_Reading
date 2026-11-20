@@ -48,20 +48,24 @@ export function TopNav({
             type="button"
             onClick={() => setIsLogoModalOpen(true)}
             title="Nhấp để tải lên / đổi logo vĩnh viễn"
-            className="relative group cursor-pointer w-9 h-9 rounded-xl overflow-hidden bg-teal-800 text-white flex items-center justify-center font-black text-sm shadow-xs transition-transform hover:scale-105 border border-teal-700/50"
+            className={`relative group cursor-pointer w-9 h-9 sm:w-10 sm:h-10 rounded-xl overflow-hidden flex items-center justify-center transition-transform hover:scale-105 ${
+              brandLogo
+                ? 'bg-transparent border-0 shadow-none'
+                : 'bg-teal-800 text-white font-black text-sm shadow-xs border border-teal-700/50'
+            }`}
           >
             {brandLogo ? (
               <img
                 src={brandLogo}
                 alt="Tiếng Anh Thầy Phúc Logo"
-                className="w-full h-full object-contain p-0.5"
+                className="w-full h-full object-contain"
               />
             ) : (
               <span className="font-bold text-base text-white">P</span>
             )}
             {/* Hover overlay icon indicating uploadable logo */}
-            <div className="absolute inset-0 bg-slate-950/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <Camera className="w-4 h-4 text-white" />
+            <div className="absolute inset-0 bg-slate-950/40 text-white rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <Camera className="w-4 h-4 text-white drop-shadow-xs" />
             </div>
           </button>
 

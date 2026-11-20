@@ -151,12 +151,18 @@ export function BrandLogoModal({
             Xem trước giao diện trên thanh tiêu đề (Header):
           </span>
           <div className="h-14 bg-white rounded-xl border border-slate-200 px-4 flex items-center gap-3 shadow-xs">
-            <div className="w-9 h-9 rounded-xl bg-teal-800 text-white flex items-center justify-center font-black text-sm shadow-xs overflow-hidden shrink-0">
+            <div
+              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center overflow-hidden shrink-0 transition-all ${
+                previewLogo
+                  ? 'bg-transparent border-0 shadow-none'
+                  : 'bg-teal-800 text-white font-black text-sm shadow-xs border border-teal-700/50'
+              }`}
+            >
               {previewLogo ? (
                 <img
                   src={previewLogo}
                   alt="Logo Preview"
-                  className="w-full h-full object-contain p-0.5"
+                  className="w-full h-full object-contain"
                 />
               ) : (
                 <span>P</span>
