@@ -1,0 +1,6 @@
+{
+  "name": "LexiBand Studio",
+  "description": "Nền tảng luyện thi và giảng dạy IELTS Reading toàn diện với Split-screen 50/50, Sổ tay từ vựng ngữ cảnh thông minh, Shadowing Audio đồng bộ và Trình chiếu lớp học 16:9.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
