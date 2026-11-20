@@ -1,22 +1,32 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertCircle,
   ArrowRight,
   BookOpen,
   Check,
   ChevronLeft,
   ChevronRight,
+  FileText,
   HelpCircle,
-  RotateCw,
-  Sparkles,
-  Volume2,
-  List,
   Layers,
+  List,
+  Maximize2,
+  Minimize2,
+  Moon,
+  Presentation,
+  Printer,
+  RotateCw,
   Search,
-  CheckCircle2,
-  AlertCircle,
-  ExternalLink,
+  Sparkles,
+  Sun,
+  Volume2,
+  X,
 } from 'lucide-react';
 import { ReadingPassage, VocabEntry } from '../types/ielts';
+import {
+  exportVocabToPdfBritishCouncil,
+  exportVocabToWordBritishCouncil,
+} from '../utils/exportVocabBritishCouncil';
 
 interface PreteachVocabularyViewProps {
   passages: ReadingPassage[];
@@ -37,11 +47,16 @@ export function PreteachVocabularyView({
   onStartStudent,
   onStartTeacher,
 }: PreteachVocabularyViewProps) {
-  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
+  const [viewMode, setViewMode] = useState<'cards' | 'list' | 'presentation'>('cards');
   const [cardIndex, setCardIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [onlyWeak, setOnlyWeak] = useState(false);
   const [listSearch, setListSearch] = useState('');
+
+  // 16:9 Presentation Stage States
+  const [presentationDark, setPresentationDark] = useState(true);
+  const [is169Fullscreen, setIs169Fullscreen] = useState(false);
+  const presentationRef = useRef<HTMLDivElement | null>(null);
 
   // Filter vocabulary belonging to the active passage
   const passageVocab = useMemo(() => {
@@ -98,28 +113,66 @@ export function PreteachVocabularyView({
     }
   };
 
-  // Keyboard navigation: Arrow Left/Right to change, Space to flip (only in cards mode)
-  useEffect(() => {
-    if (viewMode !== 'cards') return;
+  // Fullscreen API handler for 16:9 Presentation
+  const toggleFullscreen = () => {
+    if (!presentationRef.current) return;
+    if (!document.fullscreenElement) {
+      presentationRef.current.requestFullscreen().then(() => {
+        setIs169Fullscreen(true);
+      }).catch(() => {});
+    } else {
+      document.exitFullscreen().then(() => {
+        setIs169Fullscreen(false);
+      }).catch(() => {});
+    }
+  };
 
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIs169Fullscreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
+
+  // Keyboard navigation
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
 
-      if (e.key === ' ' || e.key === 'Enter') {
-        e.preventDefault();
-        setIsFlipped((prev) => !prev);
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        handleNext();
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        handlePrev();
+      if (viewMode === 'cards') {
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          setIsFlipped((prev) => !prev);
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          handleNext();
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          handlePrev();
+        }
+      } else if (viewMode === 'presentation') {
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          handleNext();
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          handlePrev();
+        } else if (e.key === ' ' && currentCard) {
+          e.preventDefault();
+          speakWord(currentCard.word);
+        } else if (e.key.toLowerCase() === 'f') {
+          e.preventDefault();
+          toggleFullscreen();
+        } else if (e.key === 'Escape' && !document.fullscreenElement) {
+          setViewMode('cards');
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [viewMode, safeIndex, totalCards]);
+  }, [viewMode, safeIndex, totalCards, currentCard]);
 
   const highlightWordInSentence = (sentence: string, targetWord: string) => {
     if (!sentence || !targetWord) return sentence;
@@ -141,7 +194,7 @@ export function PreteachVocabularyView({
   };
 
   return (
-    <main className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <main className="max-w-[1260px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* Top Banner: Academic Pre-teach */}
       <section className="bg-gradient-to-r from-teal-900 via-teal-800 to-emerald-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -158,7 +211,7 @@ export function PreteachVocabularyView({
               {activePassage.title}
             </h1>
             <p className="mt-2 text-sm text-teal-100 max-w-2xl leading-relaxed">
-              Dạy và nạp trước các từ vựng học thuật trọng tâm xuất hiện trong bài đọc. Học qua <strong>Cạc lật font chữ to</strong> kèm IPA, câu ví dụ trích từ bài, hoặc xem <strong>Bảng danh sách toàn bộ từ vựng</strong> theo bài.
+              Dạy và nạp trước các từ vựng học thuật trọng tâm xuất hiện trong bài đọc. Học qua <strong>Cạc lật font chữ to</strong> kèm IPA, <strong>Trình chiếu 16:9 bài giảng</strong>, hoặc xem <strong>Bảng danh sách toàn bộ từ vựng</strong> (hỗ trợ xuất Word / PDF chuẩn British Council).
             </p>
           </div>
 
@@ -184,12 +237,12 @@ export function PreteachVocabularyView({
 
       {/* Stage Controls: View Mode Toggle & Filters */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-        {/* Toggle between 3D Flashcard and Full List Mode */}
-        <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl">
+        {/* Toggle between 3D Flashcard, Full List Mode, and 16:9 Presentation */}
+        <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl overflow-x-auto max-w-full">
           <button
             type="button"
             onClick={() => setViewMode('cards')}
-            className={`inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
               viewMode === 'cards'
                 ? 'bg-teal-800 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
@@ -198,10 +251,11 @@ export function PreteachVocabularyView({
             <Layers className="w-4 h-4" />
             Học từng cạc (Flashcard)
           </button>
+
           <button
             type="button"
             onClick={() => setViewMode('list')}
-            className={`inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
               viewMode === 'list'
                 ? 'bg-teal-800 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
@@ -210,9 +264,23 @@ export function PreteachVocabularyView({
             <List className="w-4 h-4" />
             Danh sách toàn bộ ({passageVocab.length} từ)
           </button>
+
+          <button
+            type="button"
+            onClick={() => setViewMode('presentation')}
+            className={`inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
+              viewMode === 'presentation'
+                ? 'bg-teal-800 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+            title="Trình chiếu bài giảng 16:9 chuẩn máy chiếu lớp học"
+          >
+            <Presentation className="w-4 h-4" />
+            Trình chiếu 16:9
+          </button>
         </div>
 
-        {/* Progress or Quick Filter */}
+        {/* Progress or Quick Filter & 16:9 quick trigger */}
         <div className="flex items-center gap-3">
           {viewMode === 'cards' ? (
             <>
@@ -236,6 +304,10 @@ export function PreteachVocabularyView({
                 </span>
               )}
             </>
+          ) : viewMode === 'presentation' ? (
+            <span className="text-xs font-bold text-teal-900 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">
+              Slide {safeIndex + 1} / {totalCards} Từ vựng
+            </span>
           ) : (
             <span className="text-xs font-bold text-slate-600">
               Tổng cộng <strong>{passageVocab.length}</strong> từ vựng trọng tâm trong bài
@@ -245,7 +317,7 @@ export function PreteachVocabularyView({
           <button
             type="button"
             onClick={() => setOnlyWeak((prev) => !prev)}
-            className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+            className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
               onlyWeak
                 ? 'bg-amber-600 text-white shadow-xs'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -253,6 +325,19 @@ export function PreteachVocabularyView({
           >
             {onlyWeak ? 'Đang lọc: Từ yếu (<60%)' : 'Lọc từ yếu'}
           </button>
+
+          {/* Quick 16:9 presentation launcher button in cards mode */}
+          {viewMode === 'cards' && (
+            <button
+              type="button"
+              onClick={() => setViewMode('presentation')}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-300 rounded-xl transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+              title="Bật chế độ Trình chiếu 16:9 lớp học"
+            >
+              <Presentation className="w-3.5 h-3.5 text-teal-700" />
+              <span>16:9</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -416,20 +501,23 @@ export function PreteachVocabularyView({
                 </div>
               </div>
 
-              {/* Call-to-action button to view FULL LIST of vocabulary */}
-              <div className="pt-2">
+              {/* Quick Jump to Full List or 16:9 Presentation */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setViewMode('list')}
-                  className="w-full flex items-center justify-center gap-2.5 py-3 px-5 bg-gradient-to-r from-teal-50 via-emerald-50 to-teal-50 hover:from-teal-100 hover:to-emerald-100 border-2 border-teal-300 text-teal-900 rounded-2xl font-bold text-sm shadow-xs transition-all cursor-pointer group"
+                  className="flex items-center justify-center gap-2 py-3 px-4 bg-teal-50 hover:bg-teal-100 border border-teal-300 text-teal-900 rounded-2xl font-bold text-xs shadow-xs transition-all cursor-pointer"
                 >
-                  <List className="w-4 h-4 text-teal-700 group-hover:scale-110 transition-transform" />
-                  <span>
-                    {safeIndex >= totalCards - 1
-                      ? '🎉 Đã duyệt hết các từ! Bấm vào đây để xem toàn bộ danh sách từ vựng bài học'
-                      : `Hiển thị bảng tổng hợp toàn bộ ${totalCards} từ vựng Pre-teach`}
-                  </span>
-                  <ArrowRight className="w-4 h-4 text-teal-700 group-hover:translate-x-1 transition-transform" />
+                  <List className="w-4 h-4 text-teal-700" />
+                  <span>Xem bảng tổng hợp {totalCards} từ vựng</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('presentation')}
+                  className="flex items-center justify-center gap-2 py-3 px-4 bg-slate-900 hover:bg-teal-950 text-white rounded-2xl font-bold text-xs shadow-md transition-all cursor-pointer"
+                >
+                  <Presentation className="w-4 h-4 text-teal-300" />
+                  <span>Mở Trình chiếu 16:9 máy chiếu lớp học</span>
                 </button>
               </div>
             </div>
@@ -447,10 +535,183 @@ export function PreteachVocabularyView({
         </>
       )}
 
-      {/* VIEW MODE 2: FULL PRE-TEACH VOCABULARY LIST TABLE */}
+      {/* VIEW MODE 2: 16:9 CINEMA VOCABULARY CLASSROOM PRESENTATION STAGE */}
+      {viewMode === 'presentation' && (
+        <section className="space-y-4">
+          {totalCards > 0 && currentCard ? (
+            <div
+              ref={presentationRef}
+              className={`w-full max-w-5xl mx-auto rounded-3xl overflow-hidden shadow-2xl transition-all duration-300 border-4 flex flex-col justify-between ${
+                is169Fullscreen
+                  ? 'fixed inset-0 z-50 max-w-none rounded-none border-0 p-8 sm:p-12'
+                  : 'aspect-[16/9] min-h-[520px] p-6 sm:p-8'
+              } ${
+                presentationDark
+                  ? 'bg-gradient-to-br from-[#071324] via-[#0B1E36] to-[#0A192F] text-white border-teal-500/60'
+                  : 'bg-gradient-to-br from-slate-50 via-teal-50/40 to-white text-slate-900 border-teal-700/60'
+              }`}
+            >
+              {/* 16:9 Stage Header */}
+              <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-teal-300 bg-teal-950/80 px-3 py-1 rounded-full border border-teal-400/30">
+                    TRÌNH CHIẾU 16:9 · {activePassage.bandLevel}
+                  </span>
+                  <span className="text-xs font-bold text-slate-300 truncate max-w-xs sm:max-w-md hidden sm:inline">
+                    {activePassage.title}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs font-bold text-teal-300 bg-teal-950/90 px-3 py-1 rounded-full border border-teal-400/30">
+                    Slide {safeIndex + 1} / {totalCards}
+                  </span>
+
+                  {/* Dark/Light toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setPresentationDark((prev) => !prev)}
+                    title={presentationDark ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối rạp chiếu'}
+                    className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                  >
+                    {presentationDark ? <Sun className="w-4 h-4 text-amber-300" /> : <Moon className="w-4 h-4 text-slate-700" />}
+                  </button>
+
+                  {/* Fullscreen toggle */}
+                  <button
+                    type="button"
+                    onClick={toggleFullscreen}
+                    title={is169Fullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình (Phím F)'}
+                    className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                  >
+                    {is169Fullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                  </button>
+
+                  {/* Exit 16:9 */}
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('cards')}
+                    title="Thoát chế độ 16:9"
+                    className="p-2 rounded-xl bg-white/10 hover:bg-rose-600 text-white transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* 16:9 Central Display: Giant Cinema Typography */}
+              <div className="my-auto py-6 flex flex-col items-center justify-center text-center space-y-5 sm:space-y-6">
+                <div className="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-teal-950/80 border border-teal-400/40 text-xs font-bold text-teal-300 uppercase tracking-widest shadow-inner">
+                  <span>{currentCard.pos || 'academic'}</span>
+                  <span>·</span>
+                  <span>Band 7.0+</span>
+                </div>
+
+                {/* THE 60PT+ GIANT WORD */}
+                <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight leading-none drop-shadow-xl text-white">
+                  {currentCard.word}
+                </h1>
+
+                {/* IPA & Pronunciation Audio */}
+                {currentCard.ipa && (
+                  <div className="inline-flex items-center gap-4 bg-teal-950/80 border border-teal-400/40 px-6 py-2.5 rounded-full shadow-lg">
+                    <span className="text-xl sm:text-3xl font-mono text-teal-100 font-bold">
+                      {currentCard.ipa}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => speakWord(currentCard.word)}
+                      title="Phát âm giọng Anh chuẩn (en-GB)"
+                      className="p-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-full transition-transform active:scale-90 cursor-pointer shadow-md"
+                    >
+                      <Volume2 className="w-5 h-5 sm:w-6 sm:h-6" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Contextual Meaning */}
+                <div className="max-w-2xl px-4">
+                  <p className="text-2xl sm:text-3xl font-black text-amber-300 drop-shadow-md leading-snug">
+                    {currentCard.contextualMeaning}
+                  </p>
+                </div>
+
+                {/* Example sentence from reading passage */}
+                {currentCard.example && (
+                  <div className="max-w-3xl px-6 py-3.5 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl shadow-inner text-sm sm:text-base text-slate-100 italic leading-relaxed text-center">
+                    "{highlightWordInSentence(currentCard.example, currentCard.word)}"
+                  </div>
+                )}
+
+                {/* Collocation */}
+                {currentCard.extendedMeaning && (
+                  <div className="text-xs sm:text-sm text-teal-200/90 font-medium tracking-wide">
+                    Collocations & Mở rộng: <strong className="text-white">{currentCard.extendedMeaning}</strong>
+                  </div>
+                )}
+              </div>
+
+              {/* 16:9 Stage Footer: Quick Slide Jump Strip & Navigation */}
+              <div className="pt-3 border-t border-white/10 shrink-0 space-y-3">
+                {/* Horizontal Word Quick-Jump Strip */}
+                <div className="flex items-center justify-center gap-2 overflow-x-auto py-1 max-w-full">
+                  {passageVocab.map((item, idx) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setCardIndex(idx)}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                        idx === safeIndex
+                          ? 'bg-amber-400 text-slate-950 shadow-md scale-105'
+                          : 'bg-white/10 text-slate-300 hover:bg-white/20'
+                      }`}
+                    >
+                      {idx + 1}. {item.word}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Navigation Buttons & Hotkeys */}
+                <div className="flex items-center justify-between gap-4">
+                  <button
+                    type="button"
+                    onClick={handlePrev}
+                    disabled={safeIndex === 0}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl bg-white/10 hover:bg-white/20 text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    <span>Slide trước (←)</span>
+                  </button>
+
+                  <span className="text-[11px] text-slate-400 hidden sm:inline">
+                    💡 Phím tắt: <strong>← / →</strong> đổi từ · <strong>Space</strong> phát âm · <strong>F</strong> toàn màn hình · <strong>Esc</strong> thoát
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={handleNext}
+                    disabled={safeIndex >= totalCards - 1}
+                    className="inline-flex items-center gap-2 px-5 py-2 text-xs font-bold rounded-xl bg-teal-600 hover:bg-teal-500 text-white disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors shadow-sm"
+                  >
+                    <span>Slide tiếp (→)</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="p-12 text-center bg-white rounded-3xl border border-slate-200">
+              <HelpCircle className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+              <h3 className="text-lg font-bold text-slate-800">Chưa có từ vựng để trình chiếu</h3>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* VIEW MODE 3: FULL PRE-TEACH VOCABULARY LIST TABLE WITH BRITISH COUNCIL EXPORT */}
       {viewMode === 'list' && (
         <section className="space-y-6">
-          {/* Header & Search in Full List Mode */}
+          {/* Header & British Council Export Controls in Full List Mode */}
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
@@ -462,9 +723,9 @@ export function PreteachVocabularyView({
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               {/* Search input for list */}
-              <div className="relative w-full sm:w-72">
+              <div className="relative w-full sm:w-64">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
@@ -475,14 +736,47 @@ export function PreteachVocabularyView({
                 />
               </div>
 
+              {/* British Council Word & PDF Export Buttons */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => exportVocabToWordBritishCouncil(activePassage, passageVocab)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-[#002F6C] hover:bg-[#001D44] rounded-xl shadow-xs transition-colors cursor-pointer"
+                  title="Xuất file Word (.doc) theo chuẩn British Council & Cambridge"
+                >
+                  <FileText className="w-3.5 h-3.5 text-teal-200" />
+                  <span>Xuất Word (BC)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => exportVocabToPdfBritishCouncil(activePassage, passageVocab)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-[#E4002B] hover:bg-[#B80022] rounded-xl shadow-xs transition-colors cursor-pointer"
+                  title="Xuất file PDF / In ấn theo chuẩn British Council & Cambridge"
+                >
+                  <Printer className="w-3.5 h-3.5 text-amber-200" />
+                  <span>Xuất PDF (BC)</span>
+                </button>
+              </div>
+
               {/* Switch back to Card button */}
               <button
                 type="button"
                 onClick={() => setViewMode('cards')}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-xl transition-colors cursor-pointer shrink-0 shadow-xs"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-xl transition-colors cursor-pointer shrink-0 shadow-xs"
               >
                 <Layers className="w-3.5 h-3.5" />
                 Học qua Cạc lật
+              </button>
+
+              {/* Launch 16:9 Presentation */}
+              <button
+                type="button"
+                onClick={() => setViewMode('presentation')}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition-colors cursor-pointer shrink-0 shadow-xs"
+                title="Trình chiếu bài giảng 16:9"
+              >
+                <Presentation className="w-3.5 h-3.5 text-teal-700" />
+                <span>16:9</span>
               </button>
             </div>
           </div>
@@ -636,9 +930,10 @@ export function PreteachVocabularyView({
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => onStartTeacher(activePassage.id)}
-                className="px-4 py-2.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl transition-colors cursor-pointer"
+                onClick={() => setViewMode('presentation')}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl transition-colors cursor-pointer shadow-xs"
               >
+                <Presentation className="w-4 h-4 text-teal-700" />
                 Trình chiếu 16:9
               </button>
               <button
@@ -668,9 +963,10 @@ export function PreteachVocabularyView({
         <div className="flex items-center gap-3 shrink-0">
           <button
             type="button"
-            onClick={() => onStartTeacher(activePassage.id)}
-            className="px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-200 border border-slate-300 rounded-xl transition-colors cursor-pointer"
+            onClick={() => setViewMode('presentation')}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-200 border border-slate-300 rounded-xl transition-colors cursor-pointer"
           >
+            <Presentation className="w-3.5 h-3.5 text-teal-700" />
             Trình chiếu 16:9
           </button>
           <button
