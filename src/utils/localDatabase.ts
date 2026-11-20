@@ -212,6 +212,260 @@ export function exportBackupToFile(
 }
 
 /**
+ * Save backup file by opening Windows File Explorer Save-As Dialog (User can choose Drive D:, E:, etc.)
+ */
+export async function saveBackupWithFilePicker(
+  passages: ReadingPassage[],
+  vocab: VocabEntry[],
+  annotations: TextAnnotation[],
+  brandName = 'Tiếng Anh Thầy Phúc'
+): Promise<{ success: boolean; method: 'picker' | 'download'; fileName: string; canceled?: boolean }> {
+  const payload: BackupDataPayload = {
+    app: 'TiengAnhThayPhuc_IELTS_Reading',
+    version: '1.0.0',
+    exportedAt: new Date().toISOString(),
+    brandName,
+    passages,
+    vocab,
+    annotations,
+  };
+
+  const jsonString = JSON.stringify(payload, null, 2);
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const fileName = `Du_Lieu_Thay_Phuc_Backup_${dateStr}.json`;
+
+  // Try native Save As Picker so user can choose Drive D:, E:, or any folder
+  if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
+    try {
+      const picker = (window as unknown as {
+        showSaveFilePicker: (options: unknown) => Promise<{
+          createWritable: () => Promise<{
+            write: (data: string) => Promise<void>;
+            close: () => Promise<void>;
+          }>;
+          name: string;
+        }>;
+      }).showSaveFilePicker;
+
+      const fileHandle = await picker({
+        suggestedName: fileName,
+        types: [
+          {
+            description: 'Tệp dữ liệu JSON Tiếng Anh Thầy Phúc',
+            accept: { 'application/json': ['.json'] },
+          },
+        ],
+      });
+
+      const writable = await fileHandle.createWritable();
+      await writable.write(jsonString);
+      await writable.close();
+
+      return { success: true, method: 'picker', fileName: fileHandle.name };
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        return { success: false, method: 'picker', fileName, canceled: true };
+      }
+      console.warn('showSaveFilePicker error, falling back to standard download:', err);
+    }
+  }
+
+  // Fallback to standard download
+  exportBackupToFile(passages, vocab, annotations, brandName);
+  return { success: true, method: 'download', fileName };
+}
+
+/**
+ * Open Windows folder selection dialog to bind a dedicated local folder/drive for app data
+ */
+export async function chooseDirectoryOnDisk(): Promise<{
+  handle: unknown;
+  name: string;
+} | null> {
+  if (typeof window === 'undefined' || !('showDirectoryPicker' in window)) {
+    throw new Error(
+      'Trình duyệt này chưa hỗ trợ chọn thư mục trực tiếp (File System Access). Bạn có thể dùng tính năng [Chọn ổ đĩa & Lưu tệp sao lưu] để lưu vào Ổ D:, E:.'
+    );
+  }
+
+  const picker = (window as unknown as {
+    showDirectoryPicker: (options?: unknown) => Promise<{
+      name: string;
+      queryPermission?: (desc: { mode: string }) => Promise<string>;
+      requestPermission?: (desc: { mode: string }) => Promise<string>;
+      getFileHandle: (name: string, opts?: { create?: boolean }) => Promise<unknown>;
+    }>;
+  }).showDirectoryPicker;
+
+  try {
+    const dirHandle = await picker({
+      mode: 'readwrite',
+      startIn: 'documents',
+    });
+
+    // Save handle to IndexedDB
+    try {
+      const db = await openDatabase();
+      const tx = db.transaction('meta', 'readwrite');
+      const store = tx.objectStore('meta');
+      store.put({
+        key: 'custom_directory_handle',
+        handle: dirHandle,
+        name: dirHandle.name,
+        updatedAt: Date.now(),
+      });
+    } catch (e) {
+      console.warn('Could not persist dir handle to idb:', e);
+    }
+
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('lexiband_custom_dir_name', dirHandle.name);
+    }
+
+    return { handle: dirHandle, name: dirHandle.name };
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      return null;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Retrieve saved directory info from IndexedDB and localStorage
+ */
+export async function getSavedDirectoryInfo(): Promise<{
+  handle: unknown | null;
+  name: string | null;
+}> {
+  let name: string | null = null;
+  if (typeof window !== 'undefined') {
+    name = window.localStorage.getItem('lexiband_custom_dir_name');
+  }
+
+  try {
+    const db = await openDatabase();
+    const tx = db.transaction('meta', 'readonly');
+    const store = tx.objectStore('meta');
+    return new Promise((resolve) => {
+      const req = store.get('custom_directory_handle');
+      req.onsuccess = () => {
+        const record = req.result as { handle: unknown; name?: string } | undefined;
+        if (record && record.handle) {
+          resolve({ handle: record.handle, name: record.name || name });
+        } else {
+          resolve({ handle: null, name });
+        }
+      };
+      req.onerror = () => resolve({ handle: null, name });
+    });
+  } catch {
+    return { handle: null, name };
+  }
+}
+
+/**
+ * Clear saved directory from local computer binding
+ */
+export async function clearSavedDirectory(): Promise<void> {
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem('lexiband_custom_dir_name');
+    window.localStorage.removeItem('lexiband_custom_dir_path_label');
+  }
+  try {
+    const db = await openDatabase();
+    const tx = db.transaction('meta', 'readwrite');
+    tx.objectStore('meta').delete('custom_directory_handle');
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Save data directly into the user-selected folder on the computer
+ */
+export async function saveDataToSavedDirectory(
+  dirHandle: unknown,
+  passages: ReadingPassage[],
+  vocab: VocabEntry[],
+  annotations: TextAnnotation[],
+  brandName = 'Tiếng Anh Thầy Phúc'
+): Promise<{ fileName: string; size: number }> {
+  const typedHandle = dirHandle as {
+    requestPermission?: (opts: { mode: string }) => Promise<string>;
+    getFileHandle: (name: string, opts?: { create?: boolean }) => Promise<{
+      createWritable: () => Promise<{
+        write: (data: string) => Promise<void>;
+        close: () => Promise<void>;
+      }>;
+      name: string;
+    }>;
+  };
+
+  if (typedHandle.requestPermission) {
+    const perm = await typedHandle.requestPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') {
+      throw new Error('Chưa được cấp quyền ghi vào thư mục này.');
+    }
+  }
+
+  const payload: BackupDataPayload = {
+    app: 'TiengAnhThayPhuc_IELTS_Reading',
+    version: '1.0.0',
+    exportedAt: new Date().toISOString(),
+    brandName,
+    passages,
+    vocab,
+    annotations,
+  };
+
+  const jsonString = JSON.stringify(payload, null, 2);
+  const fileName = 'Du_Lieu_Thay_Phuc.json';
+  const fileHandle = await typedHandle.getFileHandle(fileName, { create: true });
+  const writable = await fileHandle.createWritable();
+  await writable.write(jsonString);
+  await writable.close();
+
+  return { fileName, size: jsonString.length };
+}
+
+/**
+ * Load data directly from the user-selected folder on the computer
+ */
+export async function loadDataFromSavedDirectory(
+  dirHandle: unknown
+): Promise<BackupDataPayload> {
+  const typedHandle = dirHandle as {
+    requestPermission?: (opts: { mode: string }) => Promise<string>;
+    getFileHandle: (name: string, opts?: { create?: boolean }) => Promise<{
+      getFile: () => Promise<File>;
+    }>;
+  };
+
+  if (typedHandle.requestPermission) {
+    const perm = await typedHandle.requestPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') {
+      throw new Error('Chưa được cấp quyền đọc thư mục này.');
+    }
+  }
+
+  const fileName = 'Du_Lieu_Thay_Phuc.json';
+  let fileHandle;
+  try {
+    fileHandle = await typedHandle.getFileHandle(fileName, { create: false });
+  } catch {
+    throw new Error(
+      `Không tìm thấy tệp "${fileName}" trong thư mục này. Vui lòng bấm "Lưu dữ liệu ngay vào thư mục" trước khi nạp.`
+    );
+  }
+
+  const file = await fileHandle.getFile();
+  const text = await file.text();
+  return validateBackupJson(text);
+}
+
+/**
  * Parse and validate an imported backup JSON file
  */
 export function validateBackupJson(jsonString: string): BackupDataPayload {
